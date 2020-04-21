@@ -1,5 +1,6 @@
 out/
 data/
+tmp/
 
 # History files
 .Rhistory

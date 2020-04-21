@@ -14,16 +14,37 @@ unlink("data", recursive=T)
 unlink("out", recursive=T)
 dir.create("data", showWarnings = FALSE)
 dir.create("out", showWarnings = FALSE)
+dir.create("tmp", showWarnings = FALSE)
 
 # Download source datasets
-download.file("http://ucdp.uu.se/downloads/ucdpprio/ucdp-prio-acd-191.Rdata.zip", "ucdp-prio-acd-191.Rdata.zip")
 
-# Extract the .RDS file from the .ZIP file and save its contacts to a tibble
-acd<-unz("ucdp-prio-acd-191.Rdata.zip", filename = "UcdpPrioConflict_v19_1.rds") %>% 
+# UCDP PRIO Armed Conflict dataset
+download.file("http://ucdp.uu.se/downloads/ucdpprio/ucdp-prio-acd-191.Rdata.zip", "tmp/ucdp-prio-acd-191.Rdata.zip")
+
+# Correlates of War Direct Contiguity v3.2 dataset
+download.file("https://correlatesofwar.org/data-sets/direct-contiguity/direct-contiguity-v3-2/at_download/file", "tmp/DirectContiguity320.zip")
+
+# Extract the PRIO .RDS file from the .ZIP file and save its contacts to a tibble
+acd<-unz("tmp/ucdp-prio-acd-191.Rdata.zip", filename = "UcdpPrioConflict_v19_1.rds") %>% 
   gzcon() %>% 
   readRDS() %>%
   as_tibble()
-unlink("ucdp-prio-acd-191.Rdata.zip")
+
+
+# Extract and load the COW Direct Contiguity dataset
+# We only care about years contained within the ACD
+contdird<-read_csv(unz("tmp/DirectContiguity320.zip", filename="DirectContiguity320/contdird.csv")) %>%
+  filter(year >= min(acd$year) & year <= max(acd$year))
+
+# Create a contiguity table in a format that can be joined to the country.years dataset
+contig.states<-contdird %>%
+  rename(cowc=state1ab) %>%
+  group_by(year, cowc) %>% 
+  summarise(contig_states = paste0(unique(state2ab), collapse=","),
+            contig_land_count = sum(conttype == 1),
+            contig_sea_count = sum(conttype != 1),
+            contig_total_count = length(unique(state2ab)))
+
 
 # Return the number of armed groups to appear in a new year that weren't present the previous year
 # where old_year and new_year are comma-delimited strings as used by ACD
@@ -180,8 +201,37 @@ conflicts<-episode.years %>%
              side_b_2nd_count = ifelse(side_b_2nd=="", 0, str_count(side_b_2nd, ",") + 1)
   )
 
+# 
+
+# Generate country.years dataset ------------------------------------------
+
+# Generate a unique list of Gleditsch country codes with NA values removed
+unique.countries<-sort(unique(codelist$gwn)[!is.na(unique(codelist$gwn))])
+
+# Create a tibble with an observation for every gwn country for every year covered by the ACD
+country.years<-expand_grid(gwn=unique.countries, year=min(episode.years$year):max(episode.years$year)) %>%
+  
+  # Add a Correlates of War country code
+  mutate(cowc = countrycode(gwn, "gwn", "cowc")) %>%
+  left_join(contig.states, by = c("cowc", "year")
+)
+
+
+# TODO handle cowc NAs
+
+
+# TODO sum interstate participation 
+# TODO sum intrastate participation
+# TODO sum secondary participation
+# TODO record number of contiguous states
+# TODO record code of contiguous states
+# TODO record centroid lat-lon
+
+
+
 # Output datasets ---------------------------------------------------------
-rm(acd)
+rm(acd, contdir)
+unlink("tmp", recursive=T)
 saveRDS(episode.years, "data/episode_years.rds")
 saveRDS(episodes, "data/episodes.rds")
 saveRDS(conflicts, "data/conflicts.rds")
