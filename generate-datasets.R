@@ -65,6 +65,12 @@ unique_values_in_comma_sep_vectors<-function(arg) {
   return (paste(unique_vector,collapse=", "))
 }
 
+is_value_in_comma_delim<-function(value, str) {
+  vec<-unlist(strsplit(str, split=", "))
+  return (value %in% vec)
+}
+
+
 # Generate the episode.years dataset --------------------------------------
 
 episode.years<-acd %>%
@@ -213,6 +219,8 @@ country.years<-expand_grid(gwn=unique.countries, year=min(episode.years$year):ma
   
   # Add a Correlates of War country code
   mutate(cowc = countrycode(gwn, "gwn", "cowc")) %>%
+  
+  # Join with the number of contiguous states from the COW Contiguity dataset
   left_join(contig.states, by = c("cowc", "year")
 )
 
