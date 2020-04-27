@@ -18,7 +18,7 @@ dir.create("tmp", showWarnings = FALSE)
 # Download source datasets
 #download.file("http://ucdp.uu.se/downloads/ucdpprio/ucdp-prio-acd-191.Rdata.zip", "data/ucdp-prio-acd-191.Rdata.zip")
 #download.file("https://correlatesofwar.org/data-sets/direct-contiguity/direct-contiguity-v3-2/at_download/file", "data/DirectContiguity320.zip")
-download.file("https://sites.psu.edu/dictators/wp-content/uploads/sites/12570/2016/05/GWF-Autocratic-Regimes-1.2.zip", "data/GWF-Autocratic-Regimes-1.2.zip")
+#download.file("https://sites.psu.edu/dictators/wp-content/uploads/sites/12570/2016/05/GWF-Autocratic-Regimes-1.2.zip", "data/GWF-Autocratic-Regimes-1.2.zip")
 # Fearon: manual download from https://dataverse.harvard.edu/dataset.xhtml?persistentId=hdl:1902.1/15494#
 #     Extract and rename as data/fearon-repdata.dta
 # World Bank GDP data: http://api.worldbank.org/v2/en/indicator/NY.GDP.MKTP.CD?downloadformat=csv
@@ -54,6 +54,19 @@ wb.area<-read_csv("data/API_AG.LND.TOTL.K2_DS2_en_csv_v2_1000224.csv", skip=3) %
   rename(cowc=`Country Code`) %>%
   pivot_longer(-`cowc`, names_to="year", values_to="area") %>%
   mutate(year=as.integer(year))
+
+# Load GWF autocratic regime type
+gwf<-unz("data/GWF-Autocratic-Regimes-1.2.zip", filename = "GWF Autocratic Regimes 1.2/GWF_AllPoliticalRegimes.dta") %>% 
+  read_dta() %>%
+  rename(cown=cowcode) %>%
+  mutate(cowc = countrycode(cown, "cown", "cowc"))
+
+# Load GWF autocratic regime failure data
+gwf.tscs<-unz("data/GWF-Autocratic-Regimes-1.2.zip", filename = "GWF Autocratic Regimes 1.2/GWFtscs.dta") %>% 
+  read_dta() %>%
+  rename(cown=cowcode) %>%
+  mutate(cowc = countrycode(cown, "cown", "cowc")) %>%
+  select(cowc, year, gwf_fail_subsregime, gwf_fail_type, gwf_fail_violent)
 
 # Create a contiguity table in a format that can be joined to the country.years dataset
 contig.states<-contdird %>%
@@ -242,8 +255,10 @@ country.years<-expand_grid(gwn=unique.countries, year=min(episode.years$year):ma
   # Join with the number of contiguous states from the COW Contiguity dataset
   left_join(contig.states, by = c("cowc", "year")) %>%
   left_join(wb.area, by = c("cowc", "year")) %>%
-  left_join(wb.gdp, by = c("cowc", "year"))
-  
+  left_join(wb.gdp, by = c("cowc", "year")) %>%
+  left_join(gwf, by = c("cowc", "year")) %>%
+  left_join(gwf.tscs, by=c("cowc", "year"))
+   
 #country.years<-country.years %>%
 #  mutate(wars.intrastate = nrow(episode.years$year == year))
 # TODO handle cowc NAs
@@ -259,9 +274,15 @@ country.years<-expand_grid(gwn=unique.countries, year=min(episode.years$year):ma
 
 
 # Output datasets ---------------------------------------------------------
-rm(acd, contdird, fearon, contig.states, wb.area, wb.gdp, unique.countries, peace_years_for_new_episode)
-unlink("tmp", recursive=T)
+
 saveRDS(episode.years, "out/episode_years.rds")
 saveRDS(episodes, "out/episodes.rds")
 saveRDS(conflicts, "out/conflicts.rds")
 saveRDS(conflicts, "out/country.years.rds")
+
+# Cleanup
+
+rm(acd, contdird, fearon, contig.states, wb.area, wb.gdp, gwf, gwf.tscs)
+rm(unique.countries, peace_years_for_new_episode)
+unlink("tmp", recursive=T)
+
