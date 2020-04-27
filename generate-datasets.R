@@ -18,12 +18,15 @@ dir.create("tmp", showWarnings = FALSE)
 # Download source datasets
 #download.file("http://ucdp.uu.se/downloads/ucdpprio/ucdp-prio-acd-191.Rdata.zip", "data/ucdp-prio-acd-191.Rdata.zip")
 #download.file("https://correlatesofwar.org/data-sets/direct-contiguity/direct-contiguity-v3-2/at_download/file", "data/DirectContiguity320.zip")
+download.file("https://sites.psu.edu/dictators/wp-content/uploads/sites/12570/2016/05/GWF-Autocratic-Regimes-1.2.zip", "data/GWF-Autocratic-Regimes-1.2.zip")
 # Fearon: manual download from https://dataverse.harvard.edu/dataset.xhtml?persistentId=hdl:1902.1/15494#
 #     Extract and rename as data/fearon-repdata.dta
 # World Bank GDP data: http://api.worldbank.org/v2/en/indicator/NY.GDP.MKTP.CD?downloadformat=csv
 #     Obtained from https://data.worldbank.org/indicator/NY.GDP.MKTP.CD
 # World Bank Area data: http://api.worldbank.org/v2/en/indicator/AG.LND.TOTL.K2?downloadformat=csv
 #     Obtained from https://data.worldbank.org/indicator/AG.LND.TOTL.K2
+# Geddes, Wright, Frantz Autocratic Regime Breakdown data from https://sites.psu.edu/dictators/
+#   https://sites.psu.edu/dictators/wp-content/uploads/sites/12570/2016/05/GWF-Autocratic-Regimes-1.2.zip
 
 # Extract the PRIO .RDS file from the .ZIP file and save its contacts to a tibble
 acd<-unz("data/ucdp-prio-acd-191.Rdata.zip", filename = "UcdpPrioConflict_v19_1.rds") %>% 
