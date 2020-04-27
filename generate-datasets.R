@@ -1,4 +1,5 @@
 library(tidyverse)
+library(haven)
 library(countrycode)
 
 # Parameters -----------------------------------------------------------------------
@@ -10,31 +11,46 @@ peace_years_for_new_episode<-3
 # Initialization ----------------------------------------------------------
 
 # Create/recreate directory structure
-unlink("data", recursive=T)
 unlink("out", recursive=T)
-dir.create("data", showWarnings = FALSE)
 dir.create("out", showWarnings = FALSE)
 dir.create("tmp", showWarnings = FALSE)
 
 # Download source datasets
-
-# UCDP PRIO Armed Conflict dataset
-download.file("http://ucdp.uu.se/downloads/ucdpprio/ucdp-prio-acd-191.Rdata.zip", "tmp/ucdp-prio-acd-191.Rdata.zip")
-
-# Correlates of War Direct Contiguity v3.2 dataset
-download.file("https://correlatesofwar.org/data-sets/direct-contiguity/direct-contiguity-v3-2/at_download/file", "tmp/DirectContiguity320.zip")
+#download.file("http://ucdp.uu.se/downloads/ucdpprio/ucdp-prio-acd-191.Rdata.zip", "data/ucdp-prio-acd-191.Rdata.zip")
+#download.file("https://correlatesofwar.org/data-sets/direct-contiguity/direct-contiguity-v3-2/at_download/file", "data/DirectContiguity320.zip")
+# Fearon: manual download from https://dataverse.harvard.edu/dataset.xhtml?persistentId=hdl:1902.1/15494#
+#     Extract and rename as data/fearon-repdata.dta
+# World Bank GDP data: http://api.worldbank.org/v2/en/indicator/NY.GDP.MKTP.CD?downloadformat=csv
+#     Obtained from https://data.worldbank.org/indicator/NY.GDP.MKTP.CD
+# World Bank Area data: http://api.worldbank.org/v2/en/indicator/AG.LND.TOTL.K2?downloadformat=csv
+#     Obtained from https://data.worldbank.org/indicator/AG.LND.TOTL.K2
 
 # Extract the PRIO .RDS file from the .ZIP file and save its contacts to a tibble
-acd<-unz("tmp/ucdp-prio-acd-191.Rdata.zip", filename = "UcdpPrioConflict_v19_1.rds") %>% 
+acd<-unz("data/ucdp-prio-acd-191.Rdata.zip", filename = "UcdpPrioConflict_v19_1.rds") %>% 
   gzcon() %>% 
   readRDS() %>%
   as_tibble()
 
-
 # Extract and load the COW Direct Contiguity dataset
 # We only care about years contained within the ACD
-contdird<-read_csv(unz("tmp/DirectContiguity320.zip", filename="DirectContiguity320/contdird.csv")) %>%
+contdird<-read_csv(unz("data/DirectContiguity320.zip", filename="DirectContiguity320/contdird.csv")) %>%
   filter(year >= min(acd$year) & year <= max(acd$year))
+
+fearon<-read_dta("data/fearon-repdata.dta")
+
+# Load World Bank GDP data in tidy format
+wb.gdp<-read_csv("data/API_NY.GDP.MKTP.CD_DS2_en_csv_v2_988718.csv", skip=3) %>%
+  select(-X65, -`Indicator Name`, -`Indicator Code`, -`Country Name`) %>%
+  rename(cowc=`Country Code`) %>%
+  pivot_longer(-`cowc`, names_to="year", values_to="gdp") %>%
+  mutate(year=as.integer(year))
+
+# Load World Bank Land Area data in tidy format
+wb.area<-read_csv("data/API_AG.LND.TOTL.K2_DS2_en_csv_v2_1000224.csv", skip=3) %>%
+  select(-X65, -`Indicator Name`, -`Indicator Code`, -`Country Name`) %>%
+  rename(cowc=`Country Code`) %>%
+  pivot_longer(-`cowc`, names_to="year", values_to="area") %>%
+  mutate(year=as.integer(year))
 
 # Create a contiguity table in a format that can be joined to the country.years dataset
 contig.states<-contdird %>%
@@ -221,10 +237,12 @@ country.years<-expand_grid(gwn=unique.countries, year=min(episode.years$year):ma
   mutate(cowc = countrycode(gwn, "gwn", "cowc")) %>%
   
   # Join with the number of contiguous states from the COW Contiguity dataset
-  left_join(contig.states, by = c("cowc", "year")
-)
-
-
+  left_join(contig.states, by = c("cowc", "year")) %>%
+  left_join(wb.area, by = c("cowc", "year")) %>%
+  left_join(wb.gdp, by = c("cowc", "year"))
+  
+#country.years<-country.years %>%
+#  mutate(wars.intrastate = nrow(episode.years$year == year))
 # TODO handle cowc NAs
 
 
@@ -238,8 +256,9 @@ country.years<-expand_grid(gwn=unique.countries, year=min(episode.years$year):ma
 
 
 # Output datasets ---------------------------------------------------------
-rm(acd, contdir)
+rm(acd, contdird, fearon, contig.states, wb.area, wb.gdp, unique.countries, peace_years_for_new_episode)
 unlink("tmp", recursive=T)
-saveRDS(episode.years, "data/episode_years.rds")
-saveRDS(episodes, "data/episodes.rds")
-saveRDS(conflicts, "data/conflicts.rds")
+saveRDS(episode.years, "out/episode_years.rds")
+saveRDS(episodes, "out/episodes.rds")
+saveRDS(conflicts, "out/conflicts.rds")
+saveRDS(conflicts, "out/country.years.rds")
