@@ -23,12 +23,14 @@ dir.create("tmp", showWarnings = FALSE)
 #download.file("http://api.worldbank.org/v2/en/indicator/NY.GDP.MKTP.CD?downloadformat=csv", "data/NY.GDP.MKTP.CD.csv")
 #download.file("http://api.worldbank.org/v2/en/indicator/AG.LND.TOTL.K2?downloadformat=csv", "data/AG.LND.TOTL.KL2.csv")
 #download.file("https://sites.psu.edu/dictators/wp-content/uploads/sites/12570/2016/05/GWF-Autocratic-Regimes-1.2.zip", "data/GWF-Autocratic-Regimes-1.2.zip")
+#download.file("http://www.systemicpeace.org/inscr/p5v2018.sav", "data/p5v2018.sav")
 
 # Fearon from https://dataverse.harvard.edu/dataset.xhtml?persistentId=hdl:1902.1/15494# (requires manual download)
 # World Bank GDP from https://data.worldbank.org/indicator/NY.GDP.MKTP.CD
 # World Bank area from from https://data.worldbank.org/indicator/AG.LND.TOTL.K2
 # World Bank pop from https://data.worldbank.org/indicator/sp.pop.totl
 # Geddes, Wright, Frantz Autocratic Regime Breakdown data from https://sites.psu.edu/dictators/
+# Polity V from https://www.systemicpeace.org/inscrdata.html
 
 # Extract the PRIO .RDS file from the .ZIP file and save its contacts to a tibble
 acd<-unz("data/ucdp-prio-acd-191.Rdata.zip", filename = "UcdpPrioConflict_v19_1.rds") %>% 
@@ -41,7 +43,11 @@ acd<-unz("data/ucdp-prio-acd-191.Rdata.zip", filename = "UcdpPrioConflict_v19_1.
 contdird<-read_csv(unz("data/DirectContiguity320.zip", filename="DirectContiguity320/contdird.csv")) %>%
   filter(year >= min(acd$year) & year <= max(acd$year))
 
-fearon<-read_dta("data/fearon-repdata.dta")
+fearon<-read_dta("data/fearon-repdata.dta") %>%
+  rename(cown=ccode)  %>%
+  mutate(cowc=countrycode(cown, "cown", "cowc")) %>%
+  select(cowc, year, ef, ethfrac)
+# TODO check unmatched values
 
 # Load World Bank GDP data in tidy format
 wb.gdp<-read_csv("data/API_NY.GDP.MKTP.CD_DS2_en_csv_v2_988718.csv", skip=3) %>%
@@ -77,6 +83,12 @@ gwf.tscs<-unz("data/GWF-Autocratic-Regimes-1.2.zip", filename = "GWF Autocratic 
   rename(cown=cowcode) %>%
   mutate(cowc = countrycode(cown, "cown", "cowc")) %>%
   select(cowc, year, gwf_fail_subsregime, gwf_fail_type, gwf_fail_violent)
+
+# Load Polity data
+polity<-read_spss("data/p5v2018.sav") %>%
+  rename(cown=ccode) %>%
+  rename(cowc=scode) %>%
+  select(-cown, -country)
 
 # Create a contiguity table in a format that can be joined to the country.years dataset
 contig.states<-contdird %>%
@@ -255,6 +267,7 @@ conflicts<-episode.years %>%
 
 # Generate a unique list of Gleditsch country codes with NA values removed
 unique.countries<-sort(unique(codelist$gwn)[!is.na(unique(codelist$gwn))])
+# TODO check 340 ambiguously matched
 
 # Create a tibble with an observation for every gwn country for every year covered by the ACD
 country.years<-expand_grid(gwn=unique.countries, year=min(episode.years$year):max(episode.years$year)) %>%
@@ -266,10 +279,13 @@ country.years<-expand_grid(gwn=unique.countries, year=min(episode.years$year):ma
   left_join(contig.states, by = c("cowc", "year")) %>%
   left_join(wb.area, by = c("cowc", "year")) %>%
   left_join(wb.gdp, by = c("cowc", "year")) %>%
-  left_join(wb.pop, by = c("cowc", "year"))
+  left_join(wb.pop, by = c("cowc", "year")) %>%
   left_join(gwf, by = c("cowc", "year")) %>%
-  left_join(gwf.tscs, by=c("cowc", "year"))
-   
+  left_join(gwf.tscs, by=c("cowc", "year")) %>%
+  left_join(polity, by = c("cowc", "year")) %>%
+  left_join(fearon, by = c("cowc", "year"))
+
+  
 #country.years<-country.years %>%
 #  mutate(wars.intrastate = nrow(episode.years$year == year))
 # TODO handle cowc NAs
