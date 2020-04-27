@@ -19,14 +19,16 @@ dir.create("tmp", showWarnings = FALSE)
 #download.file("http://ucdp.uu.se/downloads/ucdpprio/ucdp-prio-acd-191.Rdata.zip", "data/ucdp-prio-acd-191.Rdata.zip")
 #download.file("https://correlatesofwar.org/data-sets/direct-contiguity/direct-contiguity-v3-2/at_download/file", "data/DirectContiguity320.zip")
 #download.file("https://sites.psu.edu/dictators/wp-content/uploads/sites/12570/2016/05/GWF-Autocratic-Regimes-1.2.zip", "data/GWF-Autocratic-Regimes-1.2.zip")
-# Fearon: manual download from https://dataverse.harvard.edu/dataset.xhtml?persistentId=hdl:1902.1/15494#
-#     Extract and rename as data/fearon-repdata.dta
-# World Bank GDP data: http://api.worldbank.org/v2/en/indicator/NY.GDP.MKTP.CD?downloadformat=csv
-#     Obtained from https://data.worldbank.org/indicator/NY.GDP.MKTP.CD
-# World Bank Area data: http://api.worldbank.org/v2/en/indicator/AG.LND.TOTL.K2?downloadformat=csv
-#     Obtained from https://data.worldbank.org/indicator/AG.LND.TOTL.K2
+#download.file("http://api.worldbank.org/v2/en/indicator/SP.POP.TOTL?downloadformat=csv", "data/SP.POP.TOTL.csv")
+#download.file("http://api.worldbank.org/v2/en/indicator/NY.GDP.MKTP.CD?downloadformat=csv", "data/NY.GDP.MKTP.CD.csv")
+#download.file("http://api.worldbank.org/v2/en/indicator/AG.LND.TOTL.K2?downloadformat=csv", "data/AG.LND.TOTL.KL2.csv")
+#download.file("https://sites.psu.edu/dictators/wp-content/uploads/sites/12570/2016/05/GWF-Autocratic-Regimes-1.2.zip", "data/GWF-Autocratic-Regimes-1.2.zip")
+
+# Fearon from https://dataverse.harvard.edu/dataset.xhtml?persistentId=hdl:1902.1/15494# (requires manual download)
+# World Bank GDP from https://data.worldbank.org/indicator/NY.GDP.MKTP.CD
+# World Bank area from from https://data.worldbank.org/indicator/AG.LND.TOTL.K2
+# World Bank pop from https://data.worldbank.org/indicator/sp.pop.totl
 # Geddes, Wright, Frantz Autocratic Regime Breakdown data from https://sites.psu.edu/dictators/
-#   https://sites.psu.edu/dictators/wp-content/uploads/sites/12570/2016/05/GWF-Autocratic-Regimes-1.2.zip
 
 # Extract the PRIO .RDS file from the .ZIP file and save its contacts to a tibble
 acd<-unz("data/ucdp-prio-acd-191.Rdata.zip", filename = "UcdpPrioConflict_v19_1.rds") %>% 
@@ -54,6 +56,14 @@ wb.area<-read_csv("data/API_AG.LND.TOTL.K2_DS2_en_csv_v2_1000224.csv", skip=3) %
   rename(cowc=`Country Code`) %>%
   pivot_longer(-`cowc`, names_to="year", values_to="area") %>%
   mutate(year=as.integer(year))
+
+# Load World Bank Population data in tidy format
+wb.pop<-read_csv("data/API_SP.POP.TOTL_DS2_en_csv_v2_988606.csv", skip=3) %>%
+  select(-X65, -`Indicator Name`, -`Indicator Code`, -`Country Name`) %>%
+  rename(cowc=`Country Code`) %>%
+  pivot_longer(-`cowc`, names_to="year", values_to="pop") %>%
+  mutate(year=as.integer(year)) %>%
+  mutate(logpop=log(pop))
 
 # Load GWF autocratic regime type
 gwf<-unz("data/GWF-Autocratic-Regimes-1.2.zip", filename = "GWF Autocratic Regimes 1.2/GWF_AllPoliticalRegimes.dta") %>% 
@@ -256,6 +266,7 @@ country.years<-expand_grid(gwn=unique.countries, year=min(episode.years$year):ma
   left_join(contig.states, by = c("cowc", "year")) %>%
   left_join(wb.area, by = c("cowc", "year")) %>%
   left_join(wb.gdp, by = c("cowc", "year")) %>%
+  left_join(wb.pop, by = c("cowc", "year"))
   left_join(gwf, by = c("cowc", "year")) %>%
   left_join(gwf.tscs, by=c("cowc", "year"))
    
@@ -282,7 +293,7 @@ saveRDS(conflicts, "out/country.years.rds")
 
 # Cleanup
 
-rm(acd, contdird, fearon, contig.states, wb.area, wb.gdp, gwf, gwf.tscs)
+rm(acd, contdird, fearon, contig.states, wb.area, wb.gdp, gwf, gwf.tscs, wb.pop)
 rm(unique.countries, peace_years_for_new_episode)
 unlink("tmp", recursive=T)
 
